@@ -9,13 +9,13 @@ REF_DATABASE=""
 
 INPUT_ARRAY=()
 NUMBER_OF_INPUT_FILES=0
-
+PAIRED_DELIMITER=""
 
 WORK_FILE_BASES=()
 NUMBER_OF_WORKFILES=0
 
 STEP_SEPERATOR_VISUAL="<<<------------------------------------------>>>"
-
+DATA_FORMAT=""
 
 checkmark="✔"
 cross="✘"
@@ -39,7 +39,7 @@ function unitInitReport (){
     local unit=$1
     local step=$2
     echo $STEP_SEPERATOR_VISUAL
-    echo "Performing Step[ $unit / 6 ] -> $step "
+    echo "Performing Step[ $unit / 7 ] -> $step "
     echo $STEP_SEPERATOR_VISUAL
 }
 
@@ -49,7 +49,7 @@ function unitStatusReportSuccess () {
     local unit=$1
     local step=$2
     echo $STEP_SEPERATOR_VISUAL
-    echo "Completed Step[ $unit / 6 ] -> $step succesfully $checkmark"
+    echo "Completed Step[ $unit / 7 ] -> $step succesfully performed" "\033[0;32m$checkmark\033[0m"
     echo $STEP_SEPERATOR_VISUAL
 }
 
@@ -57,7 +57,7 @@ function unitStatusReportFailed () {
     local unit=$1
     local step=$2
     echo $STEP_SEPERATOR_VISUAL
-    echo "Completed Step[ $unit / 6 ] -> $step failed $cross Exiting the pipeline now"
+    echo "Completed Step[ $unit / 7 ] -> $step failed $cross Exiting the pipeline now"
     echo $STEP_SEPERATOR_VISUAL
 }
 
@@ -67,12 +67,16 @@ function unitStatusReportFailed () {
 function globalConfiguration() {
     
 
+# Create the folder if it doesn't exist
+    mkdir -p "$TARGET_FOLDER"
+    echo "Output Folder '$folder' has been created or already exists."
+
     # config 
     echo "Please provide a filename in json-Format for configuration path. If you want to enter the parameters manually, type 'manual'"
     read -p "ConfigFile " config
 
     
-    # manual path configuration 
+    # manual path configuration +++ UNVOLSTÄDNIG
     if [ "$config" == "manual" ]; then
         read -p "SourceFolder: " SOURCE_FOLDER
         read -p "TargetFolder: " TARGET_FOLDER
@@ -82,6 +86,10 @@ function globalConfiguration() {
         TARGET_FOLDER=$(python3 -c "import json; print(json.load(open('$config'))['targetFolder'])")
         REF_FOLDER=$(python3 -c "import json; print(json.load(open('$config'))['referenceGenome'])")
         REF_DATABASE=$(python3 -c "import json; print(json.load(open('$config'))['refDataBase'])")
+        DATA_FORMAT=$(python3 -c "import json; print(json.load(open('$config'))['inputDataFormat'])")
+        DATA_MODE=$(python3 -c "import json; print(json.load(open('$config'))['mode'])")
+        PAIRED_DELIMITER=$(python3 -c "import json; print(json.load(open('$config'))['delimiter_pairedReads'])")
+      
         
     fi
 
@@ -93,16 +101,7 @@ function globalConfiguration() {
 
 
     # logging style -> NOT FUNCTIONAL YET
-    read -p "You have want to generate a logging file? y/n " log
-    if [ "$log" == "y" ]; then
-        is_log=true
-        timestamp=$(date +%s)
-        logfile="$logfileBase$timestamp"
-        echo "Logfile will be created with the name: $logfile"
-        echo "Variant Calling Pipeline by Group 3. Logging mode True."
-        echo $(date) 
-        echo "Unique Timestamp" 
-    fi
+   
    
 } 
 
@@ -110,40 +109,25 @@ function globalConfiguration() {
 function fileConfiguration() {
 
    # declaring input files 
-  echo "File configuration"
-  for file in "$SOURCE_FOLDER"/*.gz; do
+  unitInitReport 1 "File configuartion"
+  for file in "$SOURCE_FOLDER"/*.$DATA_FORMAT; do
         #if [[ -f "$file" ]]; then
             INPUT_ARRAY+=($(basename "$file"))
             ln -s "$file" "$(basename "$file")"
             echo "Created symlink for $(basename "$file")"
-            echo "BASE" $(basename "$file") 
+            #echo "BASE" $(basename "$file") 
              
         #fi
     done
     NUMBER_OF_INPUTFILES=${#INPUT_ARRAY[@]}
-    echo "INPUT: "${INPUT_ARRAY[@]}""
-    echo "NUMBER: "$NUMBER_OF_INPUTFILES""
+    
 
+    if [ $? -eq 0 ]; then
+        unitStatusReportSuccess 1 "File configuration"
+    else
+        unitStatusReportFailed 1 "File configuration"
+    fi
 
-    # single or paired end configutration
-    echo "You will either work with single-or paired-end data. Enter read Mode:(single/paired)" 
-    read num
-    case $num in
-            single)
-                echo "You selected option single"
-                READS_TYPE=$num
-                reads_mode="y"
-                ;;
-            paired)
-                echo "You selected option paird"
-                READS_TYPE=$num
-                reads_mode="y"
-                ;;
-        
-            *)
-                echo "Invalid selection"
-                ;;
-        esac
 
 
 }
@@ -164,8 +148,9 @@ function printStartMessage () {
     echo "Target Folder         ->" $TARGET_FOLDER
     echo "Reference File        ->" $REF_FOLDER
     echo "Reference DB Genome   ->" $REF_DATABASE
-    echo "Read Mode             ->" $READS_TYPE
-    echo "Input Files           ->  "${INPUT_ARRAY[@]}""
+    echo "Read Mode             ->" $DATA_MODE
+    echo "Data Format           ->" $DATA_FORMAT
+    echo "Input Files           -> "${INPUT_ARRAY[@]}""
     echo "Number of Input Files -> $NUMBER_OF_INPUTFILES"
     
 
@@ -177,11 +162,11 @@ function unit2_Alignment() {
 
   
   unitInitReport 2 "Alignment"
-  if [ "$READS_TYPE" == "paired" ]; then
+  if [ "$DATA_MODE" == "paired" ]; then
     for ((i=0; i<$NUMBER_OF_INPUTFILES; i+=2))
         do
             echo "${INPUT_ARRAY[i]} + ${INPUT_ARRAY[i+1]}"
-            basename=$(echo "${INPUT_ARRAY[i]}" | awk -F'.R1' '{print $1}')
+            basename=$(echo "${INPUT_ARRAY[i]}" | awk -F' $PAIRED_DELIMITER' '{print $1}')
             outputBase="$TARGET_FOLDER$basename"
             WORK_FILE_BASES+=("$outputBase")
             bwa mem  $REF_FOLDER "${INPUT_ARRAY[i]}" "${INPUT_ARRAY[i+1]}" > $outputBase.alignment.bam 
@@ -189,11 +174,11 @@ function unit2_Alignment() {
             samtools index "$outputBase.alignment.sorted.bam" 
             samtools flagstat "$outputBase.alignment.sorted.bam" 
         done     
-    elif [ "$READS_TYPE" == "single" ]; then
+    elif [ "$DATA_MODE" == "single" ]; then
         for ((i=0; i<$NUMBER_OF_INPUTFILES; i+=1))
             do
                 echo "${INPUT_ARRAY[i]}"
-                basename=$(echo "${INPUT_ARRAY[i]}" | awk -F'.fastq' '{print $1}')
+                basename=$(echo "${INPUT_ARRAY[i]}" | awk -F'.$DATA_FORMAT' '{print $1}')
                 WORK_FILE_BASES+=("$OUTPUT_DIR$basename")
                 bwa mem  $REF_FOLDER "${INPUT_ARRAY[i]}" > $outputFile >>log.txt 
                 samtools sort -o "$outputBase".alignment.sorted.bam $outputBase.alignment.bam >>log.txt  
@@ -224,8 +209,8 @@ function unit2_Alignment() {
 
 function unit3_ReadgroupsAndDuplicateRemoval() {
      
-    echo "Starting Unit 3...Performing Removal of Duplicats and adding of Readgroups"
-
+    
+    unitInitReport 3 "Readgroups and duplicare removal"
 
     for file in "${WORK_FILE_BASES[@]}"; do
 
@@ -245,6 +230,13 @@ function unit3_ReadgroupsAndDuplicateRemoval() {
                 RGSM=sample1     
         done
 
+      if [ $? -eq 0 ]; then
+        unitStatusReportSuccess 3 "Readgroups and duplicare removal"
+    else
+        unitStatusReportFailed 3 "Readgroups and duplicare removal"
+    fi
+
+
     }
 
 function unit4_BaseRecalibration() {
@@ -258,25 +250,65 @@ function unit4_BaseRecalibration() {
     done 
 
 
+     if [ $? -eq 0 ]; then
+        unitStatusReportSuccess 4 "Base recalibration"
+    else
+        unitStatusReportFailed 4 "Base recalibration"
+    fi
+
 
 }
 
 function unit5_VariantDetection() {
+    unitInitReport 5 "Variant Detection"
     echo "Starting Unit 5...Performing Variant Detection and Filtering"
     for file in "${WORK_FILE_BASES[@]}"; do
         gatk Mutect2 -I $file.recalibrated_reads.bam -O "$file.output_variants.vcf" -R $REF_FOLDER
-        gatk FilterMutectCalls -V "$file.output_variants.vcf" -O "$file.filtered.vcf"
+        gatk FilterMutectCalls -V "$file.output_variants.vcf" -O "$file.filtered.vcf" -R $REF_FOLDER
     done
 
+
+     if [ $? -eq 0 ]; then
+        unitStatusReportSuccess 5 "Variant Detection"
+    else
+        unitStatusReportFailed 5 "Variant Detection"
+    fi
 }
 
 function unit6_snpEffects() { 
-    echo "Starting Unit 6...Performing SnpEffects"
+  
+
+    unitInitReport 6 "SNP Effect"
     for file in "${WORK_FILE_BASES[@]}"; do
         java -jar /group/opt/snpEff/snpEff.jar eff -csvStats "$file.summary.csv" GRCh38.86 "$file.filtered.vcf" > $file.annotated.vcf
     done
+
+     if [ $? -eq 0 ]; then
+        unitStatusReportSuccess 6 "SNP Effect"
+    else
+        unitStatusReportFailed 6 "SNP Effect"
+    fi
 }
 
+
+function unit7_GenerateHighImpactINDELSCSV() { 
+    
+        unitInitReport 7 "High Impact CSV"
+
+    echo "Explorative file for high impact indels in the files "${WORK_FILE_BASES[@]}"" > high_impact_indels.csv
+    for file in "${WORK_FILE_BASES[@]}"; do
+        echo "File: $file" >> high_impact_indels.csv
+        grep -w "HIGH" $file.annotated.vcf >> high_impact_indels.csv   
+    done
+
+     if [ $? -eq 0 ]; then
+        unitStatusReportSuccess 7  "High Impact CSV"
+    else
+        unitStatusReportFailed 7  "High Impact CSV"
+    fi
+    
+
+}
 
 
 
@@ -295,11 +327,13 @@ if [ "$1" == "dev" ]; then
     unit6_snpEffects
 
 
+
+#MAIN PIPELINE
 else
     runtime_paths_confirmed="n"
     runtime_files_confirmed="n"
     while [ $runtime_paths_confirmed != "y" ] ; do
-        echo "Looping because var is false."
+        
         # Set var to true or exit the loop after some condition to stop it
         globalConfiguration  
         echo "______________________________________"
@@ -313,18 +347,29 @@ else
     while [ $runtime_files_confirmed != "y" ] ; do
         fileConfiguration
         echo "Following files have been found and will be analysed:"
-        echo  "Number of files" "${INPUT_ARRAY[@]}"
+        echo  "Input files" "${INPUT_ARRAY[@]}"
         read -p "Want to continue? (y/n) 'n' will allow you to adjust the settings" runtime_files_confirmed
     done
 fi
 
 
 printStartMessage
-unit2_Alignment
-unit3_ReadgroupsAndDuplicateRemoval
-unit4_BaseRecalibration
-unit5_VariantDetection
-unit6_snpEffects
+startPipeline="n"
+read -p "Start pipeline?(y/n)"  startPipeline
+
+if [ $startPipeline == "y" ];then
+
+    unit2_Alignment
+    unit3_ReadgroupsAndDuplicateRemoval
+    unit4_BaseRecalibration
+    unit5_VariantDetection
+    unit6_snpEffects
+    unit7_GenerateHighImpactINDELSCSV
+
+else
+ echo "Abort pipeline start. Goodbye"
+ exit 0
+fi
 
 
 
