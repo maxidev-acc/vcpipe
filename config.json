@@ -1,0 +1,6 @@
+{
+    "sourceFolder": "/group/lectures/variantcalling/bioinfo23_data/fastq/testpair",
+    "targetFolder": "output/",
+    "referenceGenome": "/group/lectures/variantcalling/bioinfo23_data/reference/GATK_bundle_20220203/hg38_v0/resources_broad_hg38_v0_Homo_sapiens_assembly38.fasta",
+    "refDataBase" : "GRCh38.86"
+}
