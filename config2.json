@@ -1,10 +1,10 @@
 {
-    "sourceFolder": "/group/lectures/variantcalling/bioinfo23_data/data/group_3",
-    "targetFolder": "output/",
+    "sourceFolder": "/group/lectures/variantcalling/bioinfo23_data/fastq/testpair",
+    "targetFolder": "output2/",
     "referenceGenome": "/group/lectures/variantcalling/bioinfo23_data/reference/GATK_bundle_20220203/hg38_v0/resources_broad_hg38_v0_Homo_sapiens_assembly38.fasta",
     "refDataBase" : "GRCh38.86",
-    "inputDataFormat" : "fastq",
+    "inputDataFormat" : "gz",
     "mode": "paired" ,
-    "delimiter_pairedReads": "_",
+    "delimiter_pairedReads": ".",
     "threads":"16"
 }

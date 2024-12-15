@@ -1,3 +1,9 @@
 /output
-
+/output2
 log.txt
+*.fastq
+*.gz
+unittest.sh
+session.sh
+high_impact_indels.sh
+logfile.txt
