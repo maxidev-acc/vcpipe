@@ -1,0 +1,28 @@
+
+#Manual 
+
+1. git init
+2. git clone https://github.com/maxidev-acc/vcpipe.git
+3. neues Config File Erstellen (file.json)
+
+{
+    "sourceFolder": "/dateipfad/zu/deinen/files",
+    "targetFolder": "output/",
+    "referenceGenome": "/dateipfad/zu/deinem/referenzgenom.fasta",
+    "refDataBase" : "Datenbank für SnpEff",
+    "inputDataFormat" : "fastq oder fasta oder gz",
+    "mode": "paired oder single" ,
+    "delimiter_pairedReads": "_ oder . ",
+    "know_SNPs": "vcf file mit bekannten SNPs",
+    "threads":"zwischen 1 und 64"
+}
+
+
+4. tmux new-session -s name_der_session
+ -> bash pipeline.sh oder bash pipeline.sh dev configfile.json
+    
+ -> Anweisungen des Programms folgen 
+
+5. Fenster schließen mit Ctrl + b, then d
+6. SSH Verbindung kann geschlossen werden, Prozess läuft im Hintergrund weiter
+7. tmux attach -t name_der_session

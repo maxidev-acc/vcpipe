@@ -13,24 +13,13 @@ WORK_FILE_BASES=()
 NUMBER_OF_WORKFILES=0
 THREADS=""
 DATA_FORMAT=""
-
+KNOWN_SNPS=""
 #visuals 
 STEP_SEPERATOR_VISUAL="<<<------------------------------------------>>>"
 checkmark="✔"
 cross="✘"
 
-
-
-
-
-
-function printWelcomeMessage() {
-
-    echo $(date)
-
-}
-
-
+#FUNCTION BLOCK
 function unitInitReport (){
     local unit=$1
     local step=$2
@@ -71,11 +60,18 @@ function globalConfiguration() {
     read -p "ConfigFile " config
 
     
-    # manual path configuration +++ UNVOLSTÄDNIG
+    # manual path configuration 
     if [ "$config" == "manual" ]; then
-        read -p "SourceFolder: " SOURCE_FOLDER
-        read -p "TargetFolder: " TARGET_FOLDER
-        read -p "ReferencegenomeFolder: " REF_FOLDER
+        read -p "Source Folder: " SOURCE_FOLDER
+        read -p "Target Folder: " TARGET_FOLDER
+        read -p "Referencegenome Folder: " REF_FOLDER
+        read -p "Referencegenome Database: " REF_DATABASE
+        read -p "Input dataformat ( gz, fastq, fasta...): " DATA_FORMAT
+        read -p "Mode ( paired, single) " DATA_MODE
+        read -p "Delimiter for forward and reverse reads (. , _ ) " PAIRED_DELIMITER
+        read -p "Threads" THREADS
+        read -p "Known Snps ( vcf file)" KNOWN_SNPS
+
     else
         SOURCE_FOLDER=$(python3 -c "import json; print(json.load(open('$config'))['sourceFolder'])")
         TARGET_FOLDER=$(python3 -c "import json; print(json.load(open('$config'))['targetFolder'])")
@@ -85,13 +81,15 @@ function globalConfiguration() {
         DATA_MODE=$(python3 -c "import json; print(json.load(open('$config'))['mode'])")
         PAIRED_DELIMITER=$(python3 -c "import json; print(json.load(open('$config'))['delimiter_pairedReads'])")
         THREADS=$(python3 -c "import json; print(json.load(open('$config'))['threads'])")
+        KNOWN_SNPS=$(python3 -c "import json; print(json.load(open('$config'))['known_SNPS'])")
+
         
     fi
 
     if [ -d $SOURCE_FOLDER ] &&  [ -d $SOURCE_FOLDER ] && [ -e $REF_FOLDER ] ; then
-        echo "File exists!"
+        echo "Your choosen folders exist!"
         else
-        echo "File does not exist!"
+        echo "Attention! Folders do not exist!"
     fi
     mkdir -p "$TARGET_FOLDER"
     echo "Output Folder '$folder' has been created or already exists."
@@ -105,7 +103,7 @@ function globalConfiguration() {
 function fileConfiguration() {
 
    # declaring input files 
-  unitInitReport 1 "File configuartion"
+  unitInitReport 1 "File configuration"
   for file in "$SOURCE_FOLDER"/*.$DATA_FORMAT; do
         #if [[ -f "$file" ]]; then
             INPUT_ARRAY+=($(basename "$file"))
@@ -185,33 +183,23 @@ function unit2_Alignment() {
                 samtools index "$outputBase.alignment.sorted.bam" &>>log.txt 
                 samtools flagstat "$outputBase.alignment.sorted.bam" &>>log.txt 
                 samtools tview -d C "$outputBase.alignment.sorted.bam" &>>log.txt 
-       
-
             done    
-
     fi
 
     #number of files that will be generated for each step in the following workflow
     NUMBER_OF_WORKFILES="${#WORK_FILE_BASES[@]}"
 
     if [ $? -eq 0 ]; then
-        unitStatusReportSuccess 2 "Alignement"
+        unitStatusReportSuccess 2 "Alignment"
     else
-        unitStatusReportFailed 2 "Alignement"
+        unitStatusReportFailed 2 "Alignment"
     fi
-
-
-    
- 
-
   }
 
 
 function unit3_ReadgroupsAndDuplicateRemoval() {
      
-    
     unitInitReport 3 "Readgroups and duplicare removal"
-
     for file in "${WORK_FILE_BASES[@]}"; do
 
             java -jar /group/bin/picard.jar MarkDuplicates \
@@ -232,7 +220,7 @@ function unit3_ReadgroupsAndDuplicateRemoval() {
                 &>>logfile.txt
         done
 
-      if [ $? -eq 0 ]; then
+    if [ $? -eq 0 ]; then
         unitStatusReportSuccess 3 "Readgroups and duplicare removal"
     else
         unitStatusReportFailed 3 "Readgroups and duplicare removal"
@@ -244,10 +232,7 @@ function unit3_ReadgroupsAndDuplicateRemoval() {
 function unit4_BaseRecalibration() {
     unitInitReport 4 "Base recalibration"
     for file in "${WORK_FILE_BASES[@]}";do 
-   
-        
-        snp="/group/lectures/variantcalling/bioinfo23_data/reference/GATK_bundle_20220203/hg38_v0/resources_broad_hg38_v0_Homo_sapiens_assembly38.dbsnp138.vcf"
-        gatk BaseRecalibrator -I "$file.rg_added.bam" --known-sites $snp -O $file.table --reference $REF_FOLDER &>>logfile.txt
+        gatk BaseRecalibrator -I "$file.rg_added.bam" --known-sites $KNOWN_SNPS -O $file.table --reference $REF_FOLDER &>>logfile.txt
         gatk ApplyBQSR --input "$file.rg_added.bam" --output $file.recalibrated_reads.bam -bqsr $file.table &>>logfile.txt
     done 
 
@@ -316,10 +301,20 @@ function unit7_GenerateHighImpactINDELSCSV() {
 
 #BASIS KONFIGURATION (normal oder dev)
 if [ "$1" == "dev" ]; then
-    config="config.json"
+    config="$2"
     SOURCE_FOLDER=$(python3 -c "import json; print(json.load(open('$config'))['sourceFolder'])")
     TARGET_FOLDER=$(python3 -c "import json; print(json.load(open('$config'))['targetFolder'])")
     REF_FOLDER=$(python3 -c "import json; print(json.load(open('$config'))['referenceGenome'])")
+    REF_DATABASE=$(python3 -c "import json; print(json.load(open('$config'))['refDataBase'])")
+    DATA_FORMAT=$(python3 -c "import json; print(json.load(open('$config'))['inputDataFormat'])")
+    DATA_MODE=$(python3 -c "import json; print(json.load(open('$config'))['mode'])")
+    PAIRED_DELIMITER=$(python3 -c "import json; print(json.load(open('$config'))['delimiter_pairedReads'])")
+    THREADS=$(python3 -c "import json; print(json.load(open('$config'))['threads'])")
+    KNOWN_SNPS=$(python3 -c "import json; print(json.load(open('$config'))['known_SNPS'])")
+    mkdir -p "$TARGET_FOLDER"
+    echo "Output Folder '$folder' has been created or already exists."
+
+
     fileConfiguration
     printStartMessage
     unit2_Alignment
@@ -327,7 +322,7 @@ if [ "$1" == "dev" ]; then
     unit4_BaseRecalibration
     unit5_VariantDetection
     unit6_snpEffects
-
+    unit7_GenerateHighImpactINDELSCSV
 
 
 #MAIN PIPELINE
@@ -335,8 +330,6 @@ else
     runtime_paths_confirmed="n"
     runtime_files_confirmed="n"
     while [ $runtime_paths_confirmed != "y" ] ; do
-        
-        # Set var to true or exit the loop after some condition to stop it
         globalConfiguration  
         echo "______________________________________"
         echo "Source Folder " $SOURCE_FOLDER
@@ -357,7 +350,7 @@ fi
 
 printStartMessage
 startPipeline="n"
-read -p "Start pipeline?(y/n)"  startPipeline
+read -p "Start pipeline?(y/n) 'n' will terminate the process"  startPipeline
 
 if [ $startPipeline == "y" ];then
 
