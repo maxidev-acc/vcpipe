@@ -280,7 +280,7 @@ function unit6_snpEffects() {
 
 function unit7_GenerateHighImpactINDELSCSV() { 
     
-        unitInitReport 7 "High Impact CSV"
+    unitInitReport 7 "High Impact CSV"
 
     echo "Explorative file for high impact indels in the files "${WORK_FILE_BASES[@]}"" > $TARGET_FOLDER/high_impact.summary.csv 
     for file in "${WORK_FILE_BASES[@]}"; do
@@ -288,10 +288,10 @@ function unit7_GenerateHighImpactINDELSCSV() {
         grep -w "HIGH" $file.annotated.vcf >> $TARGET_FOLDER/high_impact.summary.csv   
     done
 
-     if [ $? -eq 0 ]; then
-        unitStatusReportSuccess 7  "High Impact CSV"
+    if [ $? -eq 0 ]; then
+        unitStatusReportSuccess 7 "High Impact CSV"
     else
-        unitStatusReportFailed 7  "High Impact CSV"
+        unitStatusReportFailed 7 "High Impact CSV"
     fi
     
 

@@ -6,5 +6,6 @@
     "inputDataFormat" : "gz",
     "mode": "paired" ,
     "delimiter_pairedReads": ".",
+    "known_SNPS": "/group/lectures/variantcalling/bioinfo23_data/reference/GATK_bundle_20220203/hg38_v0/resources_broad_hg38_v0_Homo_sapiens_assembly38.dbsnp138.vcf",
     "threads":"16"
 }
